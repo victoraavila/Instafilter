@@ -8,11 +8,16 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import PhotosUI
+import StoreKit
 import SwiftUI
 
 // We will activate the Change Filter Button next (including using .confirmationDialog(), which is a list of Buttons that slides up from the bottom of the screen and you can add as many of these things as you want to. It can even scroll...)
 // 1. We need a property inside our View that will store whether the Confirmation Dialog is currently showing or not.
 // 2. Add our Buttons using the .confirmationDialog() modifier, which works identically to .alert(): give it a title and a condition to monitor, and as soon as the condition becomes true the confirmation dialog will be shown.
+
+// New, we will add 2 more features:
+// 1. A Button to share processedImage elsewhere on the device using ShareLink. It lets us share things like text, URLs and pictures very easily in one line of code and takes care of showing the system's share sheet with only the apps that can handle the content we are sending.
+// 2. An encouragement for users to leave a review for the app when the user has really felt the benefit of your app. We will display it only when the user has changed filters for 20 times. (Remember to import StoreKit).
 
 struct ContentView: View {
     @State private var processedImage: Image?
@@ -26,6 +31,11 @@ struct ContentView: View {
     // "I don't care it's setting a Sepia Tone filter. I just want some kind of CIFilter."
     @State private var currentFilter: CIFilter = CIFilter.sepiaTone()
     let context = CIContext()
+    
+    // One property to get the review request from SwiftUI's environment and one to track how many filter changes have taken place.
+    // We will use @AppStorage for that so it's preserved between app runs.
+    @Environment(\.requestReview) var requestReview
+    @AppStorage("filterCount") var filterCount = 0
     
     var body: some View {
         NavigationStack {
@@ -57,6 +67,12 @@ struct ContentView: View {
                     Button("Change Filter", action: changeFilter)
                     
                     Spacer()
+                    
+                    // Check to see if we actually have an image to share
+                    if let processedImage {
+                        // The processedImage is the content we are sharing and the preview of the content we are sharing
+                        ShareLink(item: processedImage, preview: SharePreview("Instafilter image", image: processedImage))
+                    }
                 }
             }
             .padding([.horizontal, .bottom])
@@ -110,10 +126,16 @@ struct ContentView: View {
         processedImage = Image(uiImage: uiImage)
     }
     
-    func setFilter(_ filter: CIFilter) {
+    @MainActor func setFilter(_ filter: CIFilter) {
         // Loading the image is triggered every time a filter changes. You could change that by running the code responsible for loading the UIImage once and then storing beginImage in another @State property.
         currentFilter = filter
         loadImage()
+        
+        filterCount += 1
+        if filterCount >= 20 {
+            // Swift can't guarantee this piece of UI code is going to run on the MainActor unless we specifically force that to be the case by adding @MainActor in front of the func.
+            requestReview()
+        }
     }
 }
 
