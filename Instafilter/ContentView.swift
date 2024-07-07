@@ -10,24 +10,21 @@ import CoreImage.CIFilterBuiltins
 import PhotosUI
 import SwiftUI
 
-// The first step in this project is going to be to build a basic UI, i.e., a NavigationStack to show the app's name across the top, a box in the middle asking users to import a picture, an intensity slider that affects how strongly we apply our CoreImage filters (0 to 1) and then a sharing Button to export the processed image somewhere outside our app.
+// We will activate the Change Filter Button next (including using .confirmationDialog(), which is a list of Buttons that slides up from the bottom of the screen and you can add as many of these things as you want to. It can even scroll...)
+// 1. We need a property inside our View that will store whether the Confirmation Dialog is currently showing or not.
+// 2. Add our Buttons using the .confirmationDialog() modifier, which works identically to .alert(): give it a title and a condition to monitor, and as soon as the condition becomes true the confirmation dialog will be shown.
 
 struct ContentView: View {
-    // Using Image? because the user hasn't selected any image at initialization
     @State private var processedImage: Image?
-    @State private var filterIntensity = 0.5 // The slider value
-    
-    // We need to let users select photos from their Photo Library to import
-    // 1. import SwiftUI
-    // 2. Add an @State property to track which photo the user selected (Optional because there isn't one by default)
-    // 3. Place a PhotosPickerView whenever we want to trigger photo selection (we will wrap the if let-else and use it as a label)
-    // 4. Have a method that will be called when an Image is selected: we're gonna load a binary blob of data from PhotosPickerItem? and feed that into UIImage.
+    @State private var filterIntensity = 0.5
     @State private var selectedItem: PhotosPickerItem?
+    @State private var showingFilters = false
     
-    // A context, in CoreImage, is an object responsible for rendering a CIImage to a CGImage. In practice, it converts the recipe of an image to an actual series of pixels we can work with.
-    // Contexts are expensive to create: if you will render many images, you should create a context once (when you app starts up) and keep it alive
-    // The filter will be marked with @State because we want it to be flexible (so the user can change from Sepia to another).
-    @State private var currentFilter = CIFilter.sepiaTone()
+    // By doing the following, we get an object of the class CIFilter that conforms to a protocol called CISepiaTone. Internally, it maps the kCIInputIntensityKey key to the .intensity attribute we set in the code.
+//    @State private var currentFilter = CIFilter.sepiaTone()
+    
+    // "I don't care it's setting a Sepia Tone filter. I just want some kind of CIFilter."
+    @State private var currentFilter: CIFilter = CIFilter.sepiaTone()
     let context = CIContext()
     
     var body: some View {
@@ -35,12 +32,7 @@ struct ContentView: View {
             VStack {
                 Spacer()
                 
-                // The blue coloring indicates the PhotosPicker works
                 PhotosPicker(selection: $selectedItem) {
-                    // Image selection area, with spaces up and below
-                    // 1. If we have an image already selected, then we should show it
-                    // 2. Otherwise, we'll display a simple ContentUnavailableView (so users know the space isn't accidentally blank)
-                    // Unwrapping optionals right here let us make only one of two possibilities visible (depending whether we have an Image or not), which is nice
                     if let processedImage {
                         processedImage
                             .resizable()
@@ -49,67 +41,79 @@ struct ContentView: View {
                         ContentUnavailableView("No picture", systemImage: "photo.badge.plus", description: Text("Tap to import a photo"))
                     }
                 }
-                .buttonStyle(.plain) // To disable the blue coloring
+                .buttonStyle(.plain)
                 .onChange(of: selectedItem, loadImage)
                 
                 
-                Spacer() // This is used to ensure the controls at the bottom will stay at the bottom
+                Spacer()
                 
                 HStack {
-                    // Our intensity slider
                     Text("Intensity")
                     Slider(value: $filterIntensity)
-                    // Changing the slider won't automatically trigger our applyProcessing() method
-                    // We have to tell SwiftUI to watch filter intensity with .onChange(). This can go anywhere in the View hierarchy
                         .onChange(of: filterIntensity, applyProcessing)
-                    // It appears to be slow on the simulator, but it is lightning fast on an iPhone
                 }
                 
                 HStack {
                     Button("Change Filter", action: changeFilter)
                     
                     Spacer()
-                    
-                    // Share the picture
                 }
             }
             .padding([.horizontal, .bottom])
             .navigationTitle("Instafilter")
+            .confirmationDialog("Select a filter", isPresented: $showingFilters) {
+                // We can create an Array of Buttons to show and an Optional Message
+                // When users select a filter, it should be activated and immediately applied (apply the current intensity value to it).
+                // To make this work, we will write a method that modifies currentFilter to a new value based on what they chose and then call loadImage() straight away.
+                // The underlying CoreImage API is stringly typed: it uses strings to read and write values rather than fixed properties. This functionality helps us because we can write code that works across all filters very well. We just have to be careful to not send an invalid value in.
+                Button("Crystallize") { setFilter(CIFilter.crystallize()) }
+                Button("Edges") { setFilter(CIFilter.edges()) }
+                Button("Gaussian Blur") { setFilter(CIFilter.gaussianBlur()) }
+                Button("Pixellate") { setFilter(CIFilter.pixellate()) }
+                Button("Sepia Tone") { setFilter(CIFilter.sepiaTone()) }
+                Button("Unsharp Mask") { setFilter(CIFilter.unsharpMask()) }
+                Button("Vignette") { setFilter(CIFilter.vignette()) }
+                Button("Cancel", role: .cancel) { }
+            }
         }
     }
     
-    // Instead of putting the logic directly inside the Button, Paul prefers to create this separated method to clean up the code
     func changeFilter() {
-        
+        showingFilters = true
     }
     
     func loadImage() {
-        Task { // To work asynchronously
-            // Give me the pure binary data from this thing
-            // We can't use Image here because we can't feed an Image into the module CoreImage
-            guard let imageData = try await selectedItem?.loadTransferable(type: Data.self) else { return } // If it fails, return
-            guard let inputImage = UIImage(data: imageData) else { return } // If it fails, return
+        Task {
+            guard let imageData = try await selectedItem?.loadTransferable(type: Data.self) else { return }
+            guard let inputImage = UIImage(data: imageData) else { return }
             
-            // It needs to send whatever picture was chosen into the Sepia Tone filter, then call applyProcessing()
-            // CoreImage filters have a dedicated inputImage property that let us send in a CIImage for the filter to work with, but this is often bizarrely broken. It is much safer to use a filter's .setValue() with the KCIInputImage key.
             let beginImage = CIImage(image: inputImage)
             currentFilter.setValue(beginImage, forKey: kCIInputImageKey)
             applyProcessing()
-            
-            // This will run whenever selectedItem changes (we will do this by attaching the .onChange())
         }
     }
     
-    // This method will process whatever image the user imported: it will set the Sepia Tone intensity to the filterIntensity read from the slider, then run the transformation, then read the output image back from the filter, ask our CIContext to render it, then place the result into processedImage.
     func applyProcessing() {
-        currentFilter.intensity = Float(filterIntensity) // The Sepia Tone only accepts Floats, no Doubles
+//        currentFilter.intensity = Float(filterIntensity)
+        // When we don't specify a certain filter by setting the variable to be of type CIFilter, we lost access to the property. We have to call setValue() instead.
+//        currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey)
+        // The line above breaks when applying Gaussian Blur, because it does not have an internsity key attached to it. We will add more code to read the valid keys and only set the intensity key if it's actually supported by the current filter (for Gaussian Blur, it will set the radius instead). Make sure to scale the filter intensity by a number that makes sense (found by trial and error).
+        let inputKeys = currentFilter.inputKeys
+        if inputKeys.contains(kCIInputIntensityKey) { currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey) }
+        if inputKeys.contains(kCIInputRadiusKey) { currentFilter.setValue(filterIntensity * 200, forKey: kCIInputRadiusKey) }
+        if inputKeys.contains(kCIInputScaleKey) { currentFilter.setValue(filterIntensity * 10, forKey: kCIInputScaleKey) }
         
         guard let outputImage = currentFilter.outputImage else { return }
-        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else { return } // Don't read part of it, read all of it
+        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else { return }
         
-        // At this point, we have actual pixels in cgImage
         let uiImage = UIImage(cgImage: cgImage)
         processedImage = Image(uiImage: uiImage)
+    }
+    
+    func setFilter(_ filter: CIFilter) {
+        // Loading the image is triggered every time a filter changes. You could change that by running the code responsible for loading the UIImage once and then storing beginImage in another @State property.
+        currentFilter = filter
+        loadImage()
     }
 }
 
