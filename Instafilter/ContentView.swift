@@ -28,12 +28,14 @@ struct ContentView: View {
     let filterControls: [String: (String, ClosedRange<Double>)] = [
             kCIInputIntensityKey: ("Intensity", 0...1),
             kCIInputRadiusKey: ("Radius", 0...200),
-            kCIInputScaleKey: ("Scale", 0...10)
+            kCIInputScaleKey: ("Scale", 0...30),
+            kCIInputAngleKey: ("Angle", 0...6.28)
         ]
     let defaultFilterValues: [String: Double] = [
         kCIInputIntensityKey: 0.5,
         kCIInputRadiusKey: 100,
-        kCIInputScaleKey: 5
+        kCIInputScaleKey: 15,
+        kCIInputAngleKey: 3.14
     ]
     @State private var filterValues = [String: Double]()
     
@@ -75,11 +77,14 @@ struct ContentView: View {
                             Text(name)
                                 .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
                             
+                            Spacer()
+                            
                             Slider(value: Binding(
                                 get: { filterValues[key, default: (range.upperBound + range.lowerBound)/2] },
                                 set: { filterValues[key] = $0 }
                             ), in: range)
                             .disabled(selectedItem == nil)
+                            .frame(width: 250)
                             .onChange(of: filterValues[key], applyProcessing)
                         }
                     }
@@ -108,6 +113,9 @@ struct ContentView: View {
                 Button("Crystallize") { setFilter(CIFilter.crystallize()) }
                 Button("Edges") { setFilter(CIFilter.edges()) }
                 Button("Gaussian Blur") { setFilter(CIFilter.gaussianBlur()) }
+                Button("Hue Adjust") { setFilter(CIFilter.hueAdjust()) }
+                Button("Instant") { setFilter(CIFilter.photoEffectInstant()) }
+                Button("Mono") { setFilter(CIFilter.photoEffectMono()) }
                 Button("Pixellate") { setFilter(CIFilter.pixellate()) }
                 Button("Sepia Tone") { setFilter(CIFilter.sepiaTone()) }
                 Button("Unsharp Mask") { setFilter(CIFilter.unsharpMask()) }
