@@ -21,9 +21,12 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var processedImage: Image?
-    @State private var filterIntensity = 0.5
     @State private var selectedItem: PhotosPickerItem?
     @State private var showingFilters = false
+    
+    @State private var filterIntensity = 0.5
+    @State private var filterRadius = 0.5
+    @State private var filterScale = 0.5
     
     // By doing the following, we get an object of the class CIFilter that conforms to a protocol called CISepiaTone. Internally, it maps the kCIInputIntensityKey key to the .intensity attribute we set in the code.
 //    @State private var currentFilter = CIFilter.sepiaTone()
@@ -72,17 +75,17 @@ struct ContentView: View {
                     HStack {
                         Text("Radius")
                         
-                        Slider(value: $filterIntensity)
-                            .onChange(of: filterIntensity, applyProcessing)
+                        Slider(value: $filterRadius)
+                            .onChange(of: filterRadius, applyProcessing)
                     }
                 } else { }
                 
-                if currentFilter.inputKeys.contains(kCIInputRadiusKey) {
+                if currentFilter.inputKeys.contains(kCIInputScaleKey) {
                     HStack {
                         Text("Scale")
                         
-                        Slider(value: $filterIntensity)
-                            .onChange(of: filterIntensity, applyProcessing)
+                        Slider(value: $filterScale)
+                            .onChange(of: filterScale, applyProcessing)
                     }
                 } else { }
                 
@@ -137,11 +140,11 @@ struct ContentView: View {
 //        currentFilter.intensity = Float(filterIntensity)
         // When we don't specify a certain filter by setting the variable to be of type CIFilter, we lost access to the property. We have to call setValue() instead.
 //        currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey)
-        // The line above breaks when applying Gaussian Blur, because it does not have an internsity key attached to it. We will add more code to read the valid keys and only set the intensity key if it's actually supported by the current filter (for Gaussian Blur, it will set the radius instead). Make sure to scale the filter intensity by a number that makes sense (found by trial and error).
+        // The line above breaks when applying Gaussian Blur, because it does not have an intensity key attached to it. We will add more code to read the valid keys and only set the intensity key if it's actually supported by the current filter (for Gaussian Blur, it will set the radius instead). Make sure to scale the filter intensity by a number that makes sense (found by trial and error).
         let inputKeys = currentFilter.inputKeys
         if inputKeys.contains(kCIInputIntensityKey) { currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey) }
-        if inputKeys.contains(kCIInputRadiusKey) { currentFilter.setValue(filterIntensity * 200, forKey: kCIInputRadiusKey) }
-        if inputKeys.contains(kCIInputScaleKey) { currentFilter.setValue(filterIntensity * 10, forKey: kCIInputScaleKey) }
+        if inputKeys.contains(kCIInputRadiusKey) { currentFilter.setValue(filterRadius * 2.5, forKey: kCIInputRadiusKey) }
+        if inputKeys.contains(kCIInputScaleKey) { currentFilter.setValue(filterScale * 10, forKey: kCIInputScaleKey) }
         
         guard let outputImage = currentFilter.outputImage else { return }
         guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else { return }
@@ -156,7 +159,7 @@ struct ContentView: View {
         loadImage()
         
         filterCount += 1
-        if filterCount >= 20 {
+        if filterCount == 20 {
             // Swift can't guarantee this piece of UI code is going to run on the MainActor unless we specifically force that to be the case by adding @MainActor in front of the func.
             requestReview()
         }
