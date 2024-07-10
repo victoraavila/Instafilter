@@ -57,13 +57,34 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                HStack {
-                    Text("Intensity")
-                        .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
-                    Slider(value: $filterIntensity)
-                        .disabled(selectedItem == nil ? true : false)
-                        .onChange(of: filterIntensity, applyProcessing)
-                }
+                if currentFilter.inputKeys.contains(kCIInputIntensityKey) {
+                    HStack {
+                        Text("Intensity")
+                            .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
+                        
+                        Slider(value: $filterIntensity)
+                            .disabled(selectedItem == nil ? true : false)
+                            .onChange(of: filterIntensity, applyProcessing)
+                    }
+                } else { }
+                
+                if currentFilter.inputKeys.contains(kCIInputRadiusKey) {
+                    HStack {
+                        Text("Radius")
+                        
+                        Slider(value: $filterIntensity)
+                            .onChange(of: filterIntensity, applyProcessing)
+                    }
+                } else { }
+                
+                if currentFilter.inputKeys.contains(kCIInputRadiusKey) {
+                    HStack {
+                        Text("Scale")
+                        
+                        Slider(value: $filterIntensity)
+                            .onChange(of: filterIntensity, applyProcessing)
+                    }
+                } else { }
                 
                 HStack {
                     Button("Change Filter", action: changeFilter)
