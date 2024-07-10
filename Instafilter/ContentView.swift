@@ -59,12 +59,15 @@ struct ContentView: View {
                 
                 HStack {
                     Text("Intensity")
+                        .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
                     Slider(value: $filterIntensity)
+                        .disabled(selectedItem == nil ? true : false)
                         .onChange(of: filterIntensity, applyProcessing)
                 }
                 
                 HStack {
                     Button("Change Filter", action: changeFilter)
+                        .disabled(selectedItem == nil ? true : false)
                     
                     Spacer()
                     
