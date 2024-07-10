@@ -24,9 +24,18 @@ struct ContentView: View {
     @State private var selectedItem: PhotosPickerItem?
     @State private var showingFilters = false
     
-    @State private var filterIntensity = 0.5
-    @State private var filterRadius = 0.5
-    @State private var filterScale = 0.5
+    @State private var hasSetInitialIntensity = false
+    let filterControls: [String: (String, ClosedRange<Double>)] = [
+            kCIInputIntensityKey: ("Intensity", 0...1),
+            kCIInputRadiusKey: ("Radius", 0...200),
+            kCIInputScaleKey: ("Scale", 0...10)
+        ]
+    let defaultFilterValues: [String: Double] = [
+        kCIInputIntensityKey: 0.5,
+        kCIInputRadiusKey: 100,
+        kCIInputScaleKey: 5
+    ]
+    @State private var filterValues = [String: Double]()
     
     // By doing the following, we get an object of the class CIFilter that conforms to a protocol called CISepiaTone. Internally, it maps the kCIInputIntensityKey key to the .intensity attribute we set in the code.
 //    @State private var currentFilter = CIFilter.sepiaTone()
@@ -60,34 +69,21 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                if currentFilter.inputKeys.contains(kCIInputIntensityKey) {
-                    HStack {
-                        Text("Intensity")
-                            .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
-                        
-                        Slider(value: $filterIntensity)
-                            .disabled(selectedItem == nil ? true : false)
-                            .onChange(of: filterIntensity, applyProcessing)
+                ForEach(currentFilter.inputKeys, id: \.self) { key in
+                    if let (name, range) = filterControls[key] {
+                        HStack {
+                            Text(name)
+                                .foregroundColor(selectedItem == nil ? .gray.opacity(0.5) : .primary)
+                            
+                            Slider(value: Binding(
+                                get: { filterValues[key, default: (range.upperBound + range.lowerBound)/2] },
+                                set: { filterValues[key] = $0 }
+                            ), in: range)
+                            .disabled(selectedItem == nil)
+                            .onChange(of: filterValues[key], applyProcessing)
+                        }
                     }
-                } else { }
-                
-                if currentFilter.inputKeys.contains(kCIInputRadiusKey) {
-                    HStack {
-                        Text("Radius")
-                        
-                        Slider(value: $filterRadius)
-                            .onChange(of: filterRadius, applyProcessing)
-                    }
-                } else { }
-                
-                if currentFilter.inputKeys.contains(kCIInputScaleKey) {
-                    HStack {
-                        Text("Scale")
-                        
-                        Slider(value: $filterScale)
-                            .onChange(of: filterScale, applyProcessing)
-                    }
-                } else { }
+                }
                 
                 HStack {
                     Button("Change Filter", action: changeFilter)
@@ -132,6 +128,16 @@ struct ContentView: View {
             
             let beginImage = CIImage(image: inputImage)
             currentFilter.setValue(beginImage, forKey: kCIInputImageKey)
+            
+            // Set initial intensity only if it hasn't been set before
+            if !hasSetInitialIntensity {
+                if currentFilter.inputKeys.contains(kCIInputIntensityKey) {
+                    currentFilter.setValue(0.5, forKey: kCIInputIntensityKey)
+                    filterValues[kCIInputIntensityKey] = 0.5
+                }
+                hasSetInitialIntensity = true
+            }
+            
             applyProcessing()
         }
     }
@@ -141,10 +147,11 @@ struct ContentView: View {
         // When we don't specify a certain filter by setting the variable to be of type CIFilter, we lost access to the property. We have to call setValue() instead.
 //        currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey)
         // The line above breaks when applying Gaussian Blur, because it does not have an intensity key attached to it. We will add more code to read the valid keys and only set the intensity key if it's actually supported by the current filter (for Gaussian Blur, it will set the radius instead). Make sure to scale the filter intensity by a number that makes sense (found by trial and error).
-        let inputKeys = currentFilter.inputKeys
-        if inputKeys.contains(kCIInputIntensityKey) { currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey) }
-        if inputKeys.contains(kCIInputRadiusKey) { currentFilter.setValue(filterRadius * 2.5, forKey: kCIInputRadiusKey) }
-        if inputKeys.contains(kCIInputScaleKey) { currentFilter.setValue(filterScale * 10, forKey: kCIInputScaleKey) }
+        for (key, value) in filterValues {
+            if currentFilter.inputKeys.contains(key) {
+                currentFilter.setValue(value, forKey: key)
+            }
+        }
         
         guard let outputImage = currentFilter.outputImage else { return }
         guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else { return }
@@ -156,6 +163,17 @@ struct ContentView: View {
     @MainActor func setFilter(_ filter: CIFilter) {
         // Loading the image is triggered every time a filter changes. You could change that by running the code responsible for loading the UIImage once and then storing beginImage in another @State property.
         currentFilter = filter
+        filterValues.removeAll()
+        hasSetInitialIntensity = false // Reset this flag when changing filters
+        
+        for key in filter.inputKeys {
+            if let defaultValue = defaultFilterValues[key] {
+                filterValues[key] = defaultValue
+            } else if let (_, range) = filterControls[key] {
+                filterValues[key] = (range.lowerBound + range.upperBound) / 2
+            }
+        }
+        
         loadImage()
         
         filterCount += 1
